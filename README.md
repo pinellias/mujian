@@ -80,6 +80,12 @@ mujian/                        # 项目目录（自己命名，例如 /www/wwwro
 
 ---
 
+## Windows 一键启动
+
+1. 安装 [Node.js](https://nodejs.org/)（安装时勾选 **Add to PATH**）。
+2. 双击项目根目录下的 **`start.bat / start.vbs`**。
+3. 启动后自动打开浏览器，访问 `http://127.0.0.1:8910`
+
 ## 云服务器部署指南（systemd）
 
 用 systemd 把服务托管成后台守护进程——开机自启、崩溃自动重启、有标准日志（`journalctl`）。服务起来后用 IP + 端口直接访问，不需要域名。
