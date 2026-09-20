@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>幕间 · 剧本写作工作台</title>
+<!-- PWA：让网页能「安装」到手机主屏，以独立应用模式打开（隐藏浏览器地址栏/工具栏） -->
+<link rel="manifest" href="/manifest.webmanifest">
+<!-- iOS / iPadOS 独立模式 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="幕间">
+<link rel="apple-touch-icon" href="/icons/icon-512.png">
+<!-- 内联图标：省得浏览器再去要 /favicon.ico，白捡一个 404 -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Crect width='256' height='256' rx='75' fill='%23B4552D'/%3E%3Cg fill='%23fff' transform='translate(46.3,59) scale(0.583)'%3E%3Cpath d='M248,92.68a15.86,15.86,0,0,0-4.69-11.31L174.63,12.68a16,16,0,0,0-22.63,0L123.57,41.11l-58,21.77A16.06,16.06,0,0,0,55.35,75.23L32.11,214.68A8,8,0,0,0,40,224a8.4,8.4,0,0,1,1.32-.11l139.44-23.24a16,16,0,0,0,12.35-10.17l21.77-58L243.31,104A15.87,15.87,0,0,0,248,92.68Zm-69.87,92.19L63.32,204l47.37-47.37a28,28,0,1,0-11.32-11.32L52,192.7,71.13,77.86,126,57.29,198.7,130ZM112,132a12,12,0,1,1,12,12A12,12,0,0,1,112,132Zm96-15.32L139.31,48l24-24L232,92.68Z'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/lxgwwenkai-regular.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/lxgwwenkai-bold.css">
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<!-- 装成桌面应用 / 手机「添加到主屏」之后，浏览器顶部那圈工具栏就按这个上色。
+     具体颜色由 boot.js 和 setTheme 按当前主题换（取的是顶栏用的 --panel） -->
+<meta name="theme-color" id="themeColorMeta" content="#F6F0E4">
+<!-- 背景颜色 / 字体 / 字号都是全局偏好：开页就先套上，避免刷新时闪一下默认值。
+     这段必须同步执行、且要在页面渲染前跑完，所以单独成一个小文件（boot.js），
+     不合并进 app.js —— 否则要等整个 app.js 下载完才上色，首屏还是会闪 -->
+<script src="boot.js"></script>
+</head>
+<body>
+<div class="app">
+
+  <!-- ══ 顶栏 ══ -->
+  <header class="titlebar">
+    <button class="nav-toggle" id="navToggle" title="剧本列表" aria-label="打开剧本列表"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128ZM40,72H216a8,8,0,0,0,0-16H40a8,8,0,0,0,0,16ZM216,184H40a8,8,0,0,0,0,16H216a8,8,0,0,0,0-16Z"/></svg></button>
+    <div class="traffic"><i></i><i></i><i></i></div>
+    <div class="brand"><span class="logo"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M248,92.68a15.86,15.86,0,0,0-4.69-11.31L174.63,12.68a16,16,0,0,0-22.63,0L123.57,41.11l-58,21.77A16.06,16.06,0,0,0,55.35,75.23L32.11,214.68A8,8,0,0,0,40,224a8.4,8.4,0,0,0,1.32-.11l139.44-23.24a16,16,0,0,0,12.35-10.17l21.77-58L243.31,104A15.87,15.87,0,0,0,248,92.68Zm-69.87,92.19L63.32,204l47.37-47.37a28,28,0,1,0-11.32-11.32L52,192.7,71.13,77.86,126,57.29,198.7,130ZM112,132a12,12,0,1,1,12,12A12,12,0,0,1,112,132Zm96-15.32L139.31,48l24-24L232,92.68Z"/></svg></span>
+      幕间<em>剧本写作工作台</em></div>
+    <div class="docname"><b id="docTitle"></b><span id="docMeta" style="color:var(--ink-3);font-weight:500"></span></div>
+    <span class="sp"></span>
+    <span class="saved" id="saveState"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></svg><span id="saveText">已保存</span></span>
+    <!-- 同步按钮，点一下同步 -->
+    <button class="sync-btn" id="syncBtn" title="同步到云端" aria-label="同步">
+      <svg class="ic" viewBox="0 0 24 24" fill="currentColor"><path d="M4.32 7.92A8.7 8.7 0 0 1 19.68 7.92L17.39 9.14A6.1 6.1 0 0 0 6.61 9.14Z"/><path d="M18.53 8.53L21.33 10.19L17.2 10.99Z"/><path d="M19.68 16.08A8.7 8.7 0 0 1 4.32 16.08L6.61 14.86A6.1 6.1 0 0 0 17.39 14.86Z"/><path d="M5.47 15.47L2.67 13.81L6.8 13.01Z"/></svg>
+      <i class="sync-dot" id="syncDot" hidden></i>
+    </button>
+    <button class="tb-btn" id="previewBtn"><svg class="ic" viewBox="0 0 256 256" fill="currentColor"><path d="M247.31,124.76c-.35-.79-8.82-19.58-27.65-38.41C194.57,61.26,162.88,48,128,48S61.43,61.26,36.34,86.35C17.51,105.18,9,124,8.69,124.76a8,8,0,0,0,0,6.5c.35.79,8.82,19.57,27.65,38.4C61.43,194.74,93.12,208,128,208s66.57-13.26,91.66-38.34c18.83-18.83,27.3-37.61,27.65-38.4A8,8,0,0,0,247.31,124.76ZM128,192c-30.78,0-57.67-11.19-79.93-33.25A133.47,133.47,0,0,1,25,128,133.33,133.33,0,0,1,48.07,97.25C70.33,75.19,97.22,64,128,64s57.67,11.19,79.93,33.25A133.46,133.46,0,0,1,231.05,128C223.84,141.46,192.43,192,128,192Zm0-112a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Z"/></svg><span id="previewLabel">预览</span></button>
+  </header>
+
+  <!-- 移动端侧栏抽屉背景遮罩 -->
+  <div class="side-backdrop" id="sideBackdrop"></div>
+
+  <!-- ══ 多开窗口 ══ -->
+  <nav class="tabs" id="tabs">
+    <button class="tab new" id="newTab"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"/></svg>新文档</button>
+    <span class="sp"></span>
+    <span id="tabCount" style="font-size:11.5px;color:var(--ink-3)"></span>
+  </nav>
+
+  <!-- ══ 工具栏 ══ -->
+  <nav class="toolbar">
+    <div class="tl">
+      <button class="tico" id="undo" title="撤销"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M224,128a96,96,0,0,1-94.71,96H128A95.38,95.38,0,0,1,62.1,197.8a8,8,0,0,1,11-11.63A80,80,0,1,0,71.43,71.39a3.07,3.07,0,0,1-.26.25L44.59,96H72a8,8,0,0,1,0,16H24a8,8,0,0,1-8-8V56a8,8,0,0,1,16,0V85.8L60.25,60A96,96,0,0,1,224,128Z"/></svg></button>
+      <button class="tico" id="redo" title="重做"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M240,56v48a8,8,0,0,1-8,8H184a8,8,0,0,1,0-16H211.4L184.81,71.64l-.25-.24a80,80,0,1,0-1.67,114.78,8,8,0,0,1,11,11.63A95.44,95.44,0,0,1,128,224h-1.32A96,96,0,1,1,195.75,60L224,85.8V56a8,8,0,1,1,16,0Z"/></svg></button>
+    </div>
+    <div class="tl">
+      <button class="tico lab" id="layoutBtn" title="自动排版"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M32,64a8,8,0,0,1,8-8H216a8,8,0,0,1,0,16H40A8,8,0,0,1,32,64ZM64,96a8,8,0,0,0,0,16H192a8,8,0,0,0,0-16Zm152,40H40a8,8,0,0,0,0,16H216a8,8,0,0,0,0-16Zm-24,40H64a8,8,0,0,0,0,16H192a8,8,0,0,0,0-16Z"/></svg>自动排版</button>
+      <button class="tico" id="imgBtn" title="插入图片"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M208,32H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32ZM48,48H208v77.38l-24.69-24.7a16,16,0,0,0-22.62,0L53.37,208H48ZM208,208H76l96-96,36,36v60ZM96,120A24,24,0,1,0,72,96,24,24,0,0,0,96,120Zm0-32a8,8,0,1,1-8,8A8,8,0,0,1,96,88Z"/></svg></button>
+      <button class="tico" id="searchBtn" title="查找与替换"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z"/></svg></button>
+    </div>
+    <div class="tl">
+      <button class="fs" id="fsMinus" title="减小字号"><svg class="ic" viewBox="0 0 256 256" fill="currentColor"><path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z"/></svg></button>
+      <span class="v num" id="fsVal">16</span>
+      <button class="fs" id="fsPlus" title="增大字号"><svg class="ic" viewBox="0 0 256 256" fill="currentColor"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"/></svg></button>
+    </div>
+    <div class="tl fmt-grp">
+      <button class="tico" id="fontBtn" title="更换正文字体"><span style="font-size:13px;font-weight:600;letter-spacing:.02em">Aa</span></button>
+      <button class="tico" id="themeBtn" title="更换背景颜色"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M232,32a8,8,0,0,0-8-8c-44.08,0-89.31,49.71-114.43,82.63A60,60,0,0,0,32,164c0,30.88-19.54,44.73-20.47,45.37A8,8,0,0,0,16,224H92a60,60,0,0,0,57.37-77.57C182.3,121.31,232,76.08,232,32ZM92,208H34.63C41.38,198.41,48,183.92,48,164a44,44,0,1,1,44,44Zm32.42-94.45q5.14-6.66,10.09-12.55A76.23,76.23,0,0,1,155,121.49q-5.9,4.94-12.55,10.09A60.54,60.54,0,0,0,124.42,113.55Zm42.7-2.68a92.57,92.57,0,0,0-22-22c31.78-34.53,55.75-45,69.9-47.91C212.17,55.12,201.65,79.09,167.12,110.87Z"/></svg></button>
+      <button class="tico" id="importBtn" title="导入剧本"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M224,144v64a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V144a8,8,0,0,1,16,0v56H208V144a8,8,0,0,1,16,0ZM93.66,77.66,120,51.31V144a8,8,0,0,0,16,0V51.31l26.34,26.35a8,8,0,0,0,11.32-11.32l-40-40a8,8,0,0,0-11.32,0l-40,40A8,8,0,0,0,93.66,77.66Z"/></svg></button>
+      <button class="tico" id="exportBtn" title="导出"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M52,144H36a8,8,0,0,0-8,8v56a8,8,0,0,0,8,8H52a36,36,0,0,0,0-72Zm0,56H44V160h8a20,20,0,0,1,0,40Zm169.53-4.91a8,8,0,0,1,.25,11.31A30.06,30.06,0,0,1,200,216c-17.65,0-32-16.15-32-36s14.35-36,32-36a30.06,30.06,0,0,1,21.78,9.6,8,8,0,0,1-11.56,11.06A14.24,14.24,0,0,0,200,160c-8.82,0-16,9-16,20s7.18,20,16,20a14.24,14.24,0,0,0,10.22-4.66A8,8,0,0,1,221.53,195.09ZM128,144c-17.65,0-32,16.15-32,36s14.35,36,32,36,32-16.15,32-36S145.65,144,128,144Zm0,56c-8.82,0-16-9-16-20s7.18-20,16-20,16,9,16,20S136.82,200,128,200ZM48,120a8,8,0,0,0,8-8V40h88V88a8,8,0,0,0,8,8h48v16a8,8,0,0,0,16,0V88a8,8,0,0,0-2.34-5.66l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40v72A8,8,0,0,0,48,120ZM160,51.31,188.69,80H160Z"/></svg></button>
+      <button class="tico" id="pasteBtn" title="粘贴文本"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M200,32H163.74a47.92,47.92,0,0,0-71.48,0H56A16,16,0,0,0,40,48V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V48A16,16,0,0,0,200,32ZM128,32a32,32,0,0,1,30.86,24H97.14A32,32,0,0,1,128,32Zm72,184H56V48H82.75A47.9,47.9,0,0,0,80,64v8a8,8,0,0,0,8,8h80a8,8,0,0,0,8-8V64a47.9,47.9,0,0,0-2.75-16H200Z"/></svg></button>
+      <span class="fmt-sep"></span>
+      <button class="fbtn" data-type="title" title="插入标题">标题</button>
+      <button class="fbtn" data-type="act" title="插入幕">幕</button>
+      <button class="fbtn" data-type="scene-hd" title="插入场景">场景</button>
+      <button class="fbtn" data-type="action" title="插入画面/动作">画面</button>
+      <button class="fbtn" data-type="char" title="插入角色名">角色名</button>
+      <button class="fbtn" data-type="dialogue" title="插入对白">对白</button>
+      <button class="fbtn" data-type="paren" title="插入补充/括号">补充</button>
+    </div>
+  </nav>
+
+  <!-- ══ 主体 ══ -->
+  <div class="main">
+    <aside class="side">
+      <div class="side-h"><h3>我的剧本</h3>
+        <span style="display:flex;gap:2px">
+        <button id="backupImportBtn" title="导入备份包"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M144,40a16,16,0,1,1-32,0,16,16,0,0,1,32,0Zm47.76,75.9L143.4,60.71a8,8,0,0,0-12.8,0L82.24,115.9A8,8,0,0,0,88.25,128H120v80a8,8,0,0,0,16,0V128h31.75a8,8,0,0,0,6.01-13.1Z"/></svg></button>
+        <button id="backupExportBtn" title="导出备份包"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M144,216a16,16,0,1,1-32,0,16,16,0,0,1,32,0Zm47.76-75.9L143.4,195.29a8,8,0,0,1-12.8,0L82.24,140.1A8,8,0,0,1,88.25,128H120V48a8,8,0,0,1,16,0v80h31.75a8,8,0,0,1,6.01,13.1Z"/></svg></button>
+        <button id="newDocBtn" title="新建剧本"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"/></svg></button>
+        </span></div>
+      <div class="library" id="library"></div>
+      <div class="outline">
+        <div class="side-h"><h3>剧本大纲</h3>
+          <button id="outlineFold" class="fold" title="折叠/展开"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z"/></svg></button></div>
+        <div class="scene-list"></div>
+      </div>
+    </aside>
+
+    <div class="editor-wrap">
+      <!-- 有数据 -->
+      <section data-state="data" class="on">
+        <textarea class="paper raw src" id="editor" spellcheck="false"
+          placeholder="在此直接书写 Markdown 源码…&#10;&#10;# 剧名&#10;## 第一幕&#10;### 场景标题&#10;**角色名**&#10;对白或动作描写。"></textarea>
+        <div class="paper raw" id="previewPane" contenteditable="true" spellcheck="false" hidden></div>
+      </section>
+
+      <!-- 空 -->
+      <section data-state="empty"><div class="state">
+        <div class="big"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48V216Z"/></svg></div>
+        <b>还没有打开的剧本</b>
+        <span>新建一个空白剧本，或导入 .txt / .md 文件。编辑区直接书写 Markdown 源码，点「预览」看剧本排版。</span>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <button class="tb-btn primary" id="emptyNew">新建剧本</button>
+          <button class="tb-btn" id="emptyImport">从文件导入</button>
+        </div>
+      </div></section>
+
+      <!-- 加载 -->
+      <section data-state="loading"><div class="state" style="padding:48px 20px">
+        <div style="width:min(560px,100%)">
+          <div class="skel w70"></div><div class="skel"></div><div class="skel w50"></div>
+          <div class="skel"></div><div class="skel w40"></div>
+        </div>
+        <span>正在打开剧本…</span>
+      </div></section>
+
+      <!-- 异常 -->
+      <section data-state="error"><div class="state">
+        <div class="big" style="background:rgba(192,69,60,.12);color:var(--bad-ink)"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm-8-80V80a8,8,0,0,1,16,0v56a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,172Z"/></svg></div>
+        <b>剧本文件打开失败</b>
+        <span>剧本文件可能已损坏或版本过旧。可尝试重新导入，或联系文件提供方。</span>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <button class="tb-btn" data-go="data">返回编辑</button>
+          <button class="tb-btn primary">重新导入</button>
+        </div>
+      </div></section>
+    </div>
+  </div>
+
+  <!-- ══ 状态栏 ══ -->
+  <footer class="statusbar">
+    <span class="st-it"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M87.24,52.59a8,8,0,0,0-14.48,0l-64,136a8,8,0,1,0,14.48,6.81L39.9,160h80.2l16.66,35.4a8,8,0,1,0,14.48-6.81ZM47.43,144,80,74.79,112.57,144ZM200,96c-12.76,0-22.73,3.47-29.63,10.32a8,8,0,0,0,11.26,11.36c3.8-3.77,10-5.68,18.37-5.68,13.23,0,24,9,24,20v3.22A42.76,42.76,0,0,0,200,128c-22.06,0-40,16.15-40,36s17.94,36,40,36a42.73,42.73,0,0,0,24-7.25,8,8,0,0,0,16-.75V132C240,112.15,222.06,96,200,96Zm0,88c-13.23,0-24-9-24-20s10.77-20,24-20,24,9,24,20S213.23,184,200,184Z"/></svg>字数 <b class="num" id="statChars">0</b></span>
+    <span class="st-sep"></span>
+    <span class="st-it">场景 <b class="num" id="statScenes">0</b></span>
+    <span class="st-sep"></span>
+    <span class="st-it">行数 <b class="num" id="statLines">0</b></span>
+    <span class="st-sep"></span>
+    <span class="right">
+      <span class="st-it">修订 <b class="num" id="statRev">0</b></span>
+      <span class="zoom">
+        <button id="zoomOut" title="缩小显示"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z"/></svg></button>
+        <span class="zv num" id="zoomVal" title="显示比例 · 点击回到 100%">100%</span>
+        <button id="zoomIn" title="放大显示"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"/></svg></button>
+      </span>
+    </span>
+  </footer>
+</div>
+
+<!-- ══ 搜索替换 ══ -->
+<div class="scrim" id="scrim"></div>
+<div class="modal" id="searchModal">
+  <div class="inp">
+    <div><label>查找</label><input id="findInput" placeholder="输入要查找的内容" spellcheck="false"></div>
+    <div><label>替换为</label><input id="repInput" placeholder="替换成什么" spellcheck="false"></div>
+  </div>
+  <div class="feedback" id="fbLine"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></svg><span id="fbText">准备就绪</span></div>
+  <div class="acts">
+    <span class="hint">Ctrl+F 开/关 · 回车下一个</span>
+    <button class="tb-btn" id="findBtn">查找</button>
+    <button class="tb-btn" id="repBtn">替换</button>
+    <button class="tb-btn primary" id="repAllBtn">全部替换</button>
+  </div>
+</div>
+
+<!-- ══ 插入图片 ══ -->
+<div class="modal" id="imgModal">
+  <h3><svg viewBox="0 0 256 256" fill="currentColor"><path d="M208,32H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32ZM48,48H208v77.38l-24.69-24.7a16,16,0,0,0-22.62,0L53.37,208H48ZM208,208H76l96-96,36,36v60ZM96,120A24,24,0,1,0,72,96,24,24,0,0,0,96,120Zm0-32a8,8,0,1,1-8,8A8,8,0,0,1,96,88Z"/></svg><span id="imgModalTitle">插入图片</span></h3>
+  <p class="sub">选择参考图插入剧本，插入后可在页面中自由调节大小。</p>
+  <div class="pickgrid" id="pickGrid"></div>
+  <div class="uploadrow">
+    <button class="tb-btn" id="uploadImgBtn">＋ 上传本地图片</button>
+    <span style="font-size:11.5px;color:var(--ink-3)">支持 JPG / PNG，插入前会自动压缩</span>
+    <input type="file" id="localImgInput" accept="image/*" style="display:none">
+  </div>
+  <div class="pickpre">
+    <div class="pv"><img id="pickPrev" src="/image/Hippopx.jpg" alt="预览"></div>
+    <div class="ctrls">
+      <label>显示宽度</label>
+      <input type="range" class="range" id="figRange" min="40" max="160" value="90">
+      <div class="rv-line"><span>40%</span><span id="figPct">90%</span><span>160%</span></div>
+      <label style="margin-top:6px">图注</label>
+      <input id="figCaption" value="Elaina Cat" style="border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:var(--panel);color:var(--ink-1)">
+    </div>
+  </div>
+  <div class="acts">
+    <button class="tb-btn ghost" data-close>取消</button>
+    <button class="tb-btn primary" id="figInsert">插入到剧本</button>
+  </div>
+</div>
+
+<!-- ══ 导入 ══ -->
+<div class="modal" id="importModal">
+  <h3><svg viewBox="0 0 256 256" fill="currentColor"><path d="M224,144v64a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V144a8,8,0,0,1,16,0v56H208V144a8,8,0,0,1,16,0ZM93.66,77.66,120,51.31V144a8,8,0,0,0,16,0V51.31l26.34,26.35a8,8,0,0,0,11.32-11.32l-40-40a8,8,0,0,0-11.32,0l-40,40A8,8,0,0,0,93.66,77.66Z"/></svg>导入剧本</h3>
+  <p class="sub">编辑区为 Markdown 源码模式：.md 原样进入编辑区，.txt 自动转换为 Markdown。</p>
+  <div class="fmt">
+    <div class="fmt-card" data-fmt="txt">
+      <span class="fi"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48V216Z"/></svg></span>
+      <b>.txt</b><span>纯文本<br>自动转成 Markdown</span>
+    </div>
+    <div class="fmt-card sel" data-fmt="md">
+      <span class="fi"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M87.24,52.59a8,8,0,0,0-14.48,0l-64,136a8,8,0,1,0,14.48,6.81L39.9,160h80.2l16.66,35.4a8,8,0,1,0,14.48-6.81ZM47.43,144,80,74.79,112.57,144ZM200,96c-12.76,0-22.73,3.47-29.63,10.32a8,8,0,0,0,11.26,11.36c3.8-3.77,10-5.68,18.37-5.68,13.23,0,24,9,24,20v3.22A42.76,42.76,0,0,0,200,128c-22.06,0-40,16.15-40,36s17.94,36,40,36a42.73,42.73,0,0,0,24-7.25,8,8,0,0,0,16-.75V132C240,112.15,222.06,96,200,96Zm0,88c-13.23,0-24-9-24-20s10.77-20,24-20,24,9,24,20S213.23,184,200,184Z"/></svg></span>
+      <b>.md</b><span>Markdown<br>源码原样进入编辑区</span>
+    </div>
+    <div class="fmt-card" data-fmt="paste">
+      <span class="fi"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M200,32H163.74a47.92,47.92,0,0,0-71.48,0H56A16,16,0,0,0,40,48V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V48A16,16,0,0,0,200,32ZM128,32a32,32,0,0,1,30.86,24H97.14A32,32,0,0,1,128,32Zm72,184H56V48H82.75A47.9,47.9,0,0,0,80,64v8a8,8,0,0,0,8,8h80a8,8,0,0,0,8-8V64a47.9,47.9,0,0,0-2.75-16H200Z"/></svg></span>
+      <b>粘贴文本</b><span>读取剪贴板<br>直接粘进编辑区</span>
+    </div>
+  </div>
+  <div class="dropzone" id="dropzone">
+    把文件拖到这里，或 <b id="pickFile">选择本地文件</b>
+    <input type="file" id="fileInput" style="display:none">
+    <div id="importState" style="margin-top:8px;font-size:12px;color:var(--accent-ink);display:none">✓ 已选择文件，准备导入</div>
+  </div>
+  <div class="paste-fallback" id="pasteFallback">
+    <div class="ph">浏览器拦截了剪贴板读取，请在下面按 Ctrl/⌘ + V 粘贴：</div>
+    <textarea id="pasteArea" spellcheck="false" placeholder="在此粘贴剧本内容…"></textarea>
+    <div class="pb"><button class="tb-btn primary" id="pasteGo">导入这段文本</button></div>
+  </div>
+  <div class="acts">
+    <button class="tb-btn ghost" data-close>取消</button>
+    <button class="tb-btn primary" id="doImport">开始导入</button>
+  </div>
+</div>
+
+<!-- ══ 导出 ══ -->
+<div class="modal" id="exportModal">
+  <h3><svg viewBox="0 0 256 256" fill="currentColor"><path d="M52,144H36a8,8,0,0,0-8,8v56a8,8,0,0,0,8,8H52a36,36,0,0,0,0-72Zm0,56H44V160h8a20,20,0,0,1,0,40Zm169.53-4.91a8,8,0,0,1,.25,11.31A30.06,30.06,0,0,1,200,216c-17.65,0-32-16.15-32-36s14.35-36,32-36a30.06,30.06,0,0,1,21.78,9.6,8,8,0,0,1-11.56,11.06A14.24,14.24,0,0,0,200,160c-8.82,0-16,9-16,20s7.18,20,16,20a14.24,14.24,0,0,0,10.22-4.66A8,8,0,0,1,221.53,195.09ZM128,144c-17.65,0-32,16.15-32,36s14.35,36,32,36,32-16.15,32-36S145.65,144,128,144Zm0,56c-8.82,0-16-9-16-20s7.18-20,16-20,16,9,16,20S136.82,200,128,200ZM48,120a8,8,0,0,0,8-8V40h88V88a8,8,0,0,0,8,8h48v16a8,8,0,0,0,16,0V88a8,8,0,0,0-2.34-5.66l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40v72A8,8,0,0,0,48,120ZM160,51.31,188.69,80H160Z"/></svg>导出剧本</h3>
+  <p class="sub">将当前文档导出为以下格式，保存在浏览器下载目录。</p>
+  <div class="fmt">
+    <div class="fmt-card sel" data-fmt="txt">
+      <span class="fi"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48V216Z"/></svg></span>
+      <b>.txt</b><span>纯文本<br>仅保留文字</span>
+    </div>
+    <div class="fmt-card" data-fmt="md">
+      <span class="fi"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M87.24,52.59a8,8,0,0,0-14.48,0l-64,136a8,8,0,1,0,14.48,6.81L39.9,160h80.2l16.66,35.4a8,8,0,1,0,14.48-6.81ZM47.43,144,80,74.79,112.57,144ZM200,96c-12.76,0-22.73,3.47-29.63,10.32a8,8,0,0,0,11.26,11.36c3.8-3.77,10-5.68,18.37-5.68,13.23,0,24,9,24,20v3.22A42.76,42.76,0,0,0,200,128c-22.06,0-40,16.15-40,36s17.94,36,40,36a42.73,42.73,0,0,0,24-7.25,8,8,0,0,0,16-.75V132C240,112.15,222.06,96,200,96Zm0,88c-13.23,0-24-9-24-20s10.77-20,24-20,24,9,24,20S213.23,184,200,184Z"/></svg></span>
+      <b>.md</b><span>Markdown<br>与编辑区源码完全一致</span>
+    </div>
+  </div>
+  <div class="acts">
+    <button class="tb-btn ghost" data-close>取消</button>
+    <button class="tb-btn primary" id="doExport">导出到本地</button>
+  </div>
+</div>
+
+<!-- ══ 删除确认 ══ -->
+<div class="modal" id="confirmModal" style="width:min(380px,90vw)">
+  <h3><svg viewBox="0 0 256 256" fill="currentColor"><path d="M216,48H176V40a24,24,0,0,0-24-24H104A24,24,0,0,0,80,40v8H40a8,8,0,0,0,0,16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM96,40a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96ZM192,208H64V64H192ZM112,104v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm48,0v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Z"/></svg>删除剧本</h3>
+  <p class="sub" id="confirmMsg">确定要删除吗？</p>
+  <div class="acts">
+    <button class="tb-btn ghost" id="confirmCancel">取消</button>
+    <button class="tb-btn primary" id="confirmOk" style="background:var(--bad);border-color:var(--bad)">删除</button>
+  </div>
+</div>
+
+<!-- ══ 删除组：选择组内剧本去向 ══ -->
+<div class="modal" id="groupDelModal" style="width:min(420px,92vw)">
+  <h3><svg viewBox="0 0 256 256" fill="currentColor"><path d="M216,48H40a8,8,0,0,0,0,16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM192,208H64V64H192ZM88,32a8,8,0,0,1,8-8h64a8,8,0,0,1,0,16H96A8,8,0,0,1,88,32Z"/></svg>删除组</h3>
+  <p class="sub" id="groupDelMsg">删除组？</p>
+  <div class="acts">
+    <button class="tb-btn ghost" id="groupDelCancel">取消</button>
+    <button class="tb-btn" id="groupDelKeep">移到未分组</button>
+    <button class="tb-btn primary" id="groupDelDrop" style="background:var(--bad);border-color:var(--bad)">连同删除</button>
+  </div>
+</div>
+
+<!-- ══ 云端设置：把剧本同步到哪台服务器 ══
+     本机（打开这份程序的服务器，data/ 目录）始终是唯一主存储，所有读写都打它；
+     这里填的地址只是「云端镜像」，后台自动跟本机对账，方便多设备共用一份数据。
+     留空 = 不同步，纯本机。 -->
+<div class="modal" id="cloudModal" style="width:min(440px,92vw)">
+  <h3><svg viewBox="0 0 256 256" fill="currentColor"><path d="M156,168a8,8,0,0,1-8,8H48a32,32,0,0,1-4-63.7A56,56,0,0,1,140.3,89.6A36,36,0,0,1,204,120a8,8,0,0,1-16,0,20,20,0,0,0-20-20,8,8,0,0,1-8-8,40,40,0,0,0-77.8-13.3,8,8,0,0,1-9.6,4.4A24,24,0,0,0,48,152h100A8,8,0,0,1,156,168Z"/></svg>云端设置</h3>
+  <p class="sub">剧本始终存在<strong>本机服务器</strong>的 data/ 目录里（打开这份程序的服务器就是本机）。这里填的是「要<strong>同步</strong>到哪台云端服务器」：留空 = 不同步，只存本机；填别的地址 = 那台服务器作为可同步的镜像。多设备共用就都填同一个地址，打开时本机先秒显、后台自动拉最新版。</p>
+  <div class="cform">
+    <label for="cloudUrl">服务器地址</label>
+    <input id="cloudUrl" class="gate-input" type="text" placeholder="例如 https://192.168.1.10:3000" autocomplete="off" spellcheck="false">
+    <label for="cloudKey">访问口令 <em>服务器没设口令就留空</em></label>
+    <input id="cloudKey" class="gate-input" type="password" placeholder="留空 = 服务器未启用口令" autocomplete="off">
+    <p class="ctip" id="cloudTip"></p>
+  </div>
+  <div class="acts">
+    <button class="tb-btn ghost" id="cloudCancel">取消</button>
+    <button class="tb-btn ghost" id="cloudReset" style="margin-right:auto">改回本机</button>
+    <button class="tb-btn primary" id="cloudSave">保存并连接</button>
+  </div>
+</div>
+
+<!-- ══ 访问口令（云部署安全） ══ -->
+<div class="gate" id="authGate" hidden>
+  <div class="gate-box">
+    <div class="gate-logo">幕间</div>
+    <p class="gate-sub">剧本写作工作台</p>
+    <input id="authInput" class="gate-input" type="password" placeholder="输入访问口令" autocomplete="off">
+    <button id="authBtn" class="gate-btn">进 入</button>
+    <p class="gate-err" id="authErr"></p>
+  </div>
+</div>
+
+<!-- ══ 主题选择 ══ -->
+<div class="pop" id="themePop">
+  <h4>背景颜色</h4>
+  <div class="themes">
+    <div class="th-item on" data-theme-set="paper">
+      <span class="sw"><i style="background:#F1EBE0"></i><i style="background:#FBF7EE"></i><i style="background:#B4552D"></i></span>
+      <b>羊皮纸</b><span>✓</span>
+    </div>
+    <div class="th-item" data-theme-set="white">
+      <span class="sw"><i style="background:#F4F3F0"></i><i style="background:#FCFCFA"></i><i style="background:#B4552D"></i></span>
+      <b>暖白</b><span></span>
+    </div>
+    <div class="th-item" data-theme-set="mist">
+      <span class="sw"><i style="background:#EDF0F3"></i><i style="background:#FAFBFC"></i><i style="background:#B4552D"></i></span>
+      <b>雾蓝</b><span></span>
+    </div>
+    <div class="th-item" data-theme-set="ink">
+      <span class="sw"><i style="background:#1D1A15"></i><i style="background:#29251E"></i><i style="background:#E0805A"></i></span>
+      <b>深墨</b><span></span>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 正文字体选择 ══ -->
+<div class="pop" id="fontPop">
+  <h4>正文字体</h4>
+  <div class="fonts">
+    <div class="font-item on" data-font="yahei"><b>系统黑体</b><span class="fp" style="font-family:'Microsoft YaHei','PingFang SC',sans-serif">暮色里的蝉鸣声</span></div>
+    <div class="font-item" data-font="hei"><b>黑体</b><span class="fp" style="font-family:'SimHei','Heiti SC','STHeiti',sans-serif">暮色里的蝉鸣声</span></div>
+    <div class="font-item" data-font="kai"><b>楷体</b><span class="fp" style="font-family:'KaiTi','Kaiti SC','STKaiti',serif">暮色里的蝉鸣声</span></div>
+    <div class="font-item" data-font="wenkai"><b>霞鹜文楷</b><span class="fp" style="font-family:'LXGW WenKai','KaiTi','Kaiti SC',serif">暮色里的蝉鸣声</span></div>
+    <div class="font-item" data-font="fang"><b>仿宋</b><span class="fp" style="font-family:'FangSong','STFangsong','FangSong_GB2312',serif">暮色里的蝉鸣声</span></div>
+  </div>
+</div>
+
+<!-- ══ 图片右键菜单 ══ -->
+<div class="ctx" id="imgCtx">
+  <button data-ctx="rep">更换图片</button>
+  <button class="danger" data-ctx="del">删除图片</button>
+</div>
+
+<!-- 我的剧本 · 右键菜单 -->
+<div class="ctx-menu" id="docMenu">
+  <button data-act="rename"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M227.32,73.53,182.47,28.68a16,16,0,0,0-22.63,0l-120,120a16,16,0,0,0-3.56,5.16l-23.1,65.36a8,8,0,0,0,10.13,10.13l65.36-23.1a16,16,0,0,0,5.16-3.56l120-120A16,16,0,0,0,227.32,73.53ZM92.69,208H48a8,8,0,0,1,0-16H92.69ZM195.32,84.69,116.69,163.32,92.68,139.31l78.63-78.63,18,18Z"/></svg>重命名</button>
+  <div class="sep"></div>
+  <button data-act="up"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M216,168H176V128a8,8,0,0,0-8-8H88a8,8,0,0,0-8,8v40H40a8,8,0,0,1-5.66-13.66l80-80a8,8,0,0,1,11.32,0l80,80A8,8,0,0,1,216,168Z"/></svg>向上移动</button>
+  <button data-act="down"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M216,88H176V48a8,8,0,0,0-8-8H88a8,8,0,0,0-8,8V88H40a8,8,0,0,1,5.66,13.66l80,80a8,8,0,0,1,11.32,0l80-80A8,8,0,0,1,216,88Z"/></svg>向下移动</button>
+  <div class="sep"></div>
+  <button data-act="togrp"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M216,72H128a8,8,0,0,1-8-8V40H48A16,16,0,0,0,32,56v144a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V88A16,16,0,0,0,216,72ZM120,32h32a8,8,0,0,1,8,8v16a8,8,0,0,1-8,8H120a8,8,0,0,1-8-8V40A8,8,0,0,1,120,32Z"/></svg>移到组</button>
+  <button data-act="outgrp" hidden><svg viewBox="0 0 256 256" fill="currentColor"><path d="M112,168a8,8,0,0,1,0,16H64a8,8,0,0,1-8-8V80a8,8,0,0,1,8-8h48a8,8,0,0,1,0,16H72v80ZM216.49,119.51l-32,32a8,8,0,0,1-11.31-11.31L188.68,125H120a8,8,0,0,1,0-16h68.69l-15.5-15.2a8,8,0,0,1,11.31-11.31l32,32A8,8,0,0,1,216.49,119.51Z"/></svg>移出组</button>
+</div>
+
+<!-- 「移到组」的组列表（二级菜单） -->
+<div class="ctx-menu" id="grpPickMenu"></div>
+
+<!-- 组的右键菜单 -->
+<div class="ctx-menu" id="grpMenu">
+  <button data-act="newdoc"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"/></svg>新建剧本</button>
+  <button data-act="rename"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M227.32,73.53,182.47,28.68a16,16,0,0,0-22.63,0l-120,120a16,16,0,0,0-3.56,5.16l-23.1,65.36a8,8,0,0,0,10.13,10.13l65.36-23.1a16,16,0,0,0,5.16-3.56l120-120A16,16,0,0,0,227.32,73.53ZM92.69,208H48a8,8,0,0,1,0-16H92.69ZM195.32,84.69,116.69,163.32,92.68,139.31l78.63-78.63,18,18Z"/></svg>重命名</button>
+  <div class="sep"></div>
+  <button data-act="del"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M216,48H40a8,8,0,0,0,0,16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM192,208H64V64H192ZM88,32a8,8,0,0,1,8-8h64a8,8,0,0,1,0,16H96A8,8,0,0,1,88,32Z"/></svg>删除组</button>
+</div>
+
+<!-- 「+」号菜单：新建剧本 / 新建组 -->
+<div class="ctx-menu" id="newMenu">
+  <button data-act="doc"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"/></svg>新建剧本</button>
+  <button data-act="grp"><svg viewBox="0 0 256 256" fill="currentColor"><path d="M216,72H128a8,8,0,0,1-8-8V40H48A16,16,0,0,0,32,56v144a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V88A16,16,0,0,0,216,72ZM120,32h32a8,8,0,0,1,8,8v16a8,8,0,0,1-8,8H120a8,8,0,0,1-8-8V40A8,8,0,0,1,120,32Z"/></svg>新建组</button>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
