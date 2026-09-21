@@ -400,20 +400,84 @@ function delDoc(s) {
   return null;
 }
 
+function cookieVal(req, name) {
+  const c = req.headers['cookie'];
+  if (!c) return null;
+  const m = c.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+  return m ? decodeURIComponent(m[1]) : null;
+}
 function authed(req) {
   if (!ACCESS_KEY) return true;
   const u = new URL(req.url, 'http://localhost');
-  return u.searchParams.get('key') === ACCESS_KEY || req.headers['x-access-key'] === ACCESS_KEY;
+  return u.searchParams.get('key') === ACCESS_KEY
+      || req.headers['x-access-key'] === ACCESS_KEY
+      || cookieVal(req, 'mujian_key') === ACCESS_KEY;
 }
-function send(res, code, body, type) {
-  res.writeHead(code, {
+function send(res, code, body, type, extra) {
+  const hdrs = {
     'Content-Type': type || 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
-  });
+  };
+  if (extra) for (const k in extra) hdrs[k] = extra[k];
+  res.writeHead(code, hdrs);
   res.end(body);
+}
+
+/* 未认证时返回的「登录页」：完全自包含（内联样式与脚本，不引用任何外部文件），
+   因此查看源代码只会看到这一段极简 HTML，不会暴露真实的 index.html / app.js。 */
+const GATE_HTML = `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>幕间 · 访问口令</title>
+<style>
+  :root{--accent:#c0392b;--ink-1:#1c1c1e;--ink-3:#8a8a8e;--bg:#f5f3ee;--line:#e4e0d8}
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;
+    background:var(--bg);color:var(--ink-1);display:flex;align-items:center;justify-content:center}
+  .card{width:min(360px,88vw);background:#fff;border:1px solid var(--line);border-radius:14px;
+    padding:28px 24px;box-shadow:0 12px 40px rgba(0,0,0,.08);text-align:center}
+  h1{margin:0 0 4px;font-size:22px;letter-spacing:2px}
+  .sub{margin:0 0 22px;color:var(--ink-3);font-size:13px}
+  input{width:100%;padding:12px 14px;font-size:16px;border:1px solid var(--line);border-radius:10px;
+    outline:none;margin-bottom:14px}
+  input:focus{border-color:var(--accent)}
+  button{width:100%;padding:12px;border:0;border-radius:10px;background:var(--accent);color:#fff;
+    font-size:15px;cursor:pointer}
+  button:active{opacity:.9}
+  .err{color:var(--accent);font-size:13px;min-height:18px;margin-top:10px}
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>幕间</h1>
+    <p class="sub">请输入访问口令</p>
+    <input id="k" type="password" placeholder="访问口令" autocomplete="current-password" autofocus>
+    <button id="go">进入</button>
+    <div class="err" id="e"></div>
+  </div>
+<script>
+  var k=document.getElementById('k'),e=document.getElementById('e'),go=document.getElementById('go');
+  function submit(){
+    var v=k.value.trim(); if(!v){e.textContent='请输入访问口令';return;}
+    e.textContent='校验中…';
+    fetch('/api/auth?key='+encodeURIComponent(v)).then(function(r){
+      if(r.ok){localStorage.setItem('mujian_key',v);location.href='/';}
+      else{e.textContent='口令不正确，请重新输入';}
+    }).catch(function(){e.textContent='网络错误，请重试';});
+  }
+  go.onclick=submit;
+  k.addEventListener('keydown',function(ev){if(ev.key==='Enter')submit();});
+</script>
+</body>
+</html>`;
+function serveGate(res) {
+  send(res, 200, GATE_HTML, 'text/html; charset=utf-8');
 }
 
 const server = http.createServer((req, res) => {
@@ -423,6 +487,21 @@ const server = http.createServer((req, res) => {
 
   /* CORS 预检 */
   if (method === 'OPTIONS') { send(res, 204, ''); return; }
+
+  /* 口令校验公开接口：未认证也能调，仅回 200/401，不返回任何数据。
+     成功时下发 HttpOnly Cookie 维持认证态，这样登录页跳回 / 后，
+     浏览器加载 /app.js、/app.css 等静态资源会自动带上口令，不会再被弹回登录页。 */
+  if (p === '/api/auth' && method === 'GET') {
+    const ok = authed(req);
+    if (ok) {
+      send(res, 200, JSON.stringify({ ok: true }), 'application/json; charset=utf-8',
+        { 'Set-Cookie': 'mujian_key=' + encodeURIComponent(ACCESS_KEY) +
+          '; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000' });
+    } else {
+      send(res, 401, JSON.stringify({ ok: false }));
+    }
+    return;
+  }
 
   /* ── 数据接口鉴权（页面本身公开，数据必须对口令） ── */
   if (p.startsWith('/api/') && !authed(req)) {
@@ -642,6 +721,13 @@ const server = http.createServer((req, res) => {
       return;
     }
     send(res, 405, JSON.stringify({ error: 'method not allowed' }));
+    return;
+  }
+
+  /* ── 设了口令且未认证：除校验接口外，任何页面/静态资源都只回登录页，
+     避免未授权就能看到 index.html / app.js 的源码 ── */
+  if (ACCESS_KEY && !authed(req) && !p.startsWith('/api/')) {
+    serveGate(res);
     return;
   }
 

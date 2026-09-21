@@ -2599,7 +2599,12 @@ document.getElementById('authBtn').onclick=function(){
   const err=document.getElementById('authErr');
   if(!key){if(err)err.textContent='请输入访问口令';return;}
   localStorage.setItem(AUTH_KEY,key);
-  location.reload();
+  /* 先拿口令换服务端下发的认证 Cookie，再刷新回首页：
+     有了 Cookie，/app.js、/app.css 等静态资源才会被正常放行，界面才能完整渲染 */
+  fetch('/api/auth?key='+encodeURIComponent(key)).then(function(r){
+    if(r.ok)location.href='/';
+    else{localStorage.removeItem(AUTH_KEY);if(err)err.textContent='口令不正确，请重新输入';}
+  }).catch(function(){if(err)err.textContent='网络错误，请重试';});
 };
 document.getElementById('authInput').addEventListener('keydown',e=>{
   if(e.key==='Enter')document.getElementById('authBtn').click();
